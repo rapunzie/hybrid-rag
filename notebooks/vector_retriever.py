@@ -6,7 +6,7 @@ class VectorRetriever:
         self.client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
         self.collection_name = collection_name
         # Load embedding model BGE
-        self.model = SentenceTransformer("BAAI/bge-large-en-v1.5")
+        self.model = SentenceTransformer("BAAI/bge-base-en-v1.5")
 
     def embed_query(self, query):
         return self.model.encode(query, normalize_embeddings=True)
