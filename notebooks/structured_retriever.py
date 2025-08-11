@@ -46,9 +46,13 @@ class StructuredRetriever:
         match = re.search(r"\b(apple|microsoft|tesla|alphabet|p&g)\b", question, re.I)
         return match.group(1).lower() if match else None
 
-    def extract_year(self, question):
-        match = re.search(r"(20\d{2})", question)
-        return int(match.group(1)) if match else None
+    # def extract_year(self, question):
+    #     match = re.search(r"(20\d{2})", question)
+    #     return int(match.group(1)) if match else None
+
+    def extract_years(self, question):
+        years = re.findall(r"(20\d{2})", question)
+        return [int(y) for y in years] if years else []
 
     def detect_table(self, question):
         for keyword, table in self.table_map.items():
@@ -56,24 +60,47 @@ class StructuredRetriever:
                 return table
         return None
 
-    def retrieve(self, query, raw_sql=False):
-        """
-        Jika raw_sql=True, query harus berupa string SQL.
-        Jika raw_sql=False, query adalah pertanyaan natural language.
-        """
-        if raw_sql:
-            return self.db.query(query)
+    # def retrieve(self, query, raw_sql=False):
+    #     if raw_sql:
+    #         return self.db.query(query)
 
-        # mode default: pertanyaan natural language
-        company = self.extract_company(query)
-        fy = self.extract_year(query)
-        table = self.detect_table(query)
+    #     # mode default: pertanyaan natural language
+    #     company = self.extract_company(query)
+    #     fy = self.extract_year(query)
+    #     table = self.detect_table(query)
 
-        if not table:
-            return f"Tidak bisa menentukan tabel dari pertanyaan: '{query}'"
+    #     if not table:
+    #         return f"Tidak bisa menentukan tabel dari pertanyaan: '{query}'"
 
-        df = self.db.get_table_data(table, company, fy)
-        if df.empty:
-            return f"Data tidak ditemukan untuk {company or 'perusahaan'} {fy or 'tahun'} di tabel {table}"
+    #     df = self.db.get_table_data(table, company, fy)
+    #     if df.empty:
+    #         return f"Data tidak ditemukan untuk {company or 'perusahaan'} {fy or 'tahun'} di tabel {table}"
 
-        return df
+    #     return df
+
+def retrieve(self, query, raw_sql=False):
+    if raw_sql:
+        return self.db.query(query)
+
+    company = self.extract_company(query)
+    years = self.extract_years(query)  
+    table = self.detect_table(query)
+
+    if not table:
+        return f"Tidak bisa menentukan tabel dari pertanyaan: '{query}'"
+
+    dfs = []
+    if years:
+        for fy in years:
+            df_year = self.db.get_table_data(table, company, fy)
+            if not df_year.empty:
+                dfs.append(df_year)
+    else:
+        df_all = self.db.get_table_data(table, company)
+        if not df_all.empty:
+            dfs.append(df_all)
+
+    if not dfs:
+        return f"Data tidak ditemukan untuk {company or 'perusahaan'} {years or 'tahun'} di tabel {table}"
+
+    return pd.concat(dfs, ignore_index=True)
