@@ -29,7 +29,7 @@ class StructuredRetriever:
     def __init__(self, db_path):
         self.db = FinancialsDB(db_path)
 
-        # Keyword 
+        # Keyword ke tabel + kolom langsung
         self.column_map = {
             "assets": ("balance_sheets", "total_assets"),
             "liabilities": ("balance_sheets", "total_liabilities"),
@@ -43,12 +43,13 @@ class StructuredRetriever:
             "basic eps": ("income_statements", "basic"),
             "diluted eps": ("income_statements", "diluted"),
             "earnings per share": ("income_statements", "eps"),
-            "operating income": ("income_statements", "operating_income"),
-            "eps": ("income_statements", "eps"),
+            "operating income": ("income_statements", "op_income"),
             "basic": ("income_statements", "basic"),
             "diluted": ("income_statements", "diluted"),
+            "cash from operating": ("cash_from_ops"),
             "cash from investing": ("cash_flows", "cash_from_investing"),
-            "cash from investing": ("cash_flows", "cash_from_financing")
+            "cash from investing": ("cash_flows", "cash_from_financing"),
+            "ending cash": ("cash_flows", "ending_cash")
         }
 
     def extract_company(self, question):
