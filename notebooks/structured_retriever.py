@@ -68,10 +68,10 @@ class StructuredRetriever:
         return int(match.group(1)) if match else None
 
     def detect_table_and_column(self, question):
-        q = re.sub(r"[^\w\s]", " ", question.lower())  # hilangkan tanda baca
-        q = re.sub(r"\s+", " ", q)  # rapikan spasi
+        q = re.sub(r"[^\w\s]", " ", question.lower())  
+        q = re.sub(r"\s+", " ", q)  
         for keyword, (table, column) in self.column_map.items():
-            pattern = r"\b" + re.escape(keyword) + r"s?\b"  # support bentuk jamak
+            pattern = r"\b" + re.escape(keyword) + r"s?\b" 
             if re.search(pattern, q):
                 return table, column
         return None, None
