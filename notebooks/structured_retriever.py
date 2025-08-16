@@ -10,76 +10,87 @@ class FinancialsDB:
         with sqlite3.connect(self.db_path) as conn:
             return pd.read_sql_query(sql, conn, params=params or {})
 
-    def get_table_data(self, table_name, company=None, fy=None):
-        sql = f"SELECT * FROM {table_name} WHERE 1=1"
+    def get_table_data(self, table_name, company=None, fy=None, column=None):
+        if column:
+            sql = f"SELECT company, fy, {column} FROM {table_name} WHERE 1=1"
+        else:
+            sql = f"SELECT * FROM {table_name} WHERE 1=1"
         params = {}
-        if company:
-            sql += " AND company = :company"
-            params["company"] = company.lower()
+        # if company:
+        #     sql += " AND (LOWER(company) = :company OR LOWER(alias) = :company)"
+        #     params["company"] = company.lower()
         if fy:
             sql += " AND fy = :fy"
             params["fy"] = fy
         return self.query(sql, params)
 
-# Structured Retriever
+
 class StructuredRetriever:
     def __init__(self, db_path):
         self.db = FinancialsDB(db_path)
 
-        # mapping kata kunci → tabel
-        self.table_map = {
-            "assets": "balance_sheets",
-            "liabilities": "balance_sheets",
-            "equity": "balance_sheets",
-            "revenue": "income_statement",
-            "net income": "income_statement",
-            "cost of sales": "income_statement",
-            "gross margin": "income_statement",
-            "operating income": "income_statement",
-            "eps": "income_statement",
-            "cash": "cash_flows",
-            "investing": "cash_flows",
-            "financing": "cash_flows"
+        # Keyword ke tabel + kolom langsung
+        self.column_map = {
+            "assets": ("balance_sheets", "total_assets"),
+            "liabilities": ("balance_sheets", "total_liabilities"),
+            "equity": ("balance_sheets", "total_equity"),
+            "revenue": ("income_statements", "total_revenue"),
+            "net income": ("income_statements", "net_income"),
+            "cost of sales": ("income_statements", "cost_of_sales"),
+            "gross profit": ("income_statements", "gross_profit"),
+            "gross profits": ("income_statements", "gross_profit"),
+            "gross-profit": ("income_statements", "gross_profit"),
+            "basic eps": ("income_statements", "basic"),
+            "diluted eps": ("income_statements", "diluted"),
+            "earnings per share": ("income_statements", "eps"),
+            "operating income": ("income_statements", "operating_income"),
+            "eps": ("income_statements", "eps"),
+            "basic": ("income_statements", "basic"),
+            "diluted": ("income_statements", "diluted"),
+            "cash": ("cash_flows", "cash_at_end_of_period"),
+            "investing": ("cash_flows", "net_cash_used_for_investing_activities"),
+            "financing": ("cash_flows", "net_cash_used_provided_by_financing_activities")
         }
 
     def extract_company(self, question):
-        match = re.search(r"\b(apple|microsoft|tesla|alphabet|p&g)\b", question, re.I)
-        return match.group(1).lower() if match else None
+        match = re.search(r"\b(apple|microsoft|tesla|alphabet|google|procter&gamble|p&g)\b", question, re.I)
+        if not match:
+            return None
+        company = match.group(1).lower()
+        alias_map = {
+            "google": "alphabet",
+            "p&g": "procter&gamble"
+        }
+        return alias_map.get(company, company)
 
-    def extract_years(self, question):
-        years = re.findall(r"(20\d{2})", question)
-        return [int(y) for y in years] if years else []
+    def extract_year(self, question):
+        match = re.search(r"(20\d{2})", question)
+        return int(match.group(1)) if match else None
 
-    def detect_table(self, question):
-        for keyword, table in self.table_map.items():
-            if keyword in question.lower():
-                return table
-        return None
+    def detect_table_and_column(self, question):
+        q = re.sub(r"[^\w\s]", " ", question.lower())  # hilangkan tanda baca
+        q = re.sub(r"\s+", " ", q)  # rapikan spasi
+        for keyword, (table, column) in self.column_map.items():
+            pattern = r"\b" + re.escape(keyword) + r"s?\b"  # support bentuk jamak
+            if re.search(pattern, q):
+                return table, column
+        return None, None
 
     def retrieve(self, query, raw_sql=False):
         if raw_sql:
-            return self.db.query(query)
+            return self.db.query(query).to_string(index=False)
 
-        # Ambil parameter dari pertanyaan
         company = self.extract_company(query)
-        years = self.extract_years(query)
-        table = self.detect_table(query)
+        fy = self.extract_year(query)
+        table, column = self.detect_table_and_column(query)
 
         if not table:
             return f"Tidak bisa menentukan tabel dari pertanyaan: '{query}'"
 
-        dfs = []
-        if years:
-            for fy in years:
-                df_year = self.db.get_table_data(table, company, fy)
-                if not df_year.empty:
-                    dfs.append(df_year)
-        else:
-            df_all = self.db.get_table_data(table, company)
-            if not df_all.empty:
-                dfs.append(df_all)
+        df = self.db.get_table_data(table, company, fy, column)
+        if df.empty:
+            return f"Data tidak ditemukan untuk {company or 'perusahaan'} {fy or 'tahun'} di tabel {table}"
 
-        if not dfs:
-            return f"Data tidak ditemukan untuk {company or 'perusahaan'} {years or 'tahun'} di tabel {table}"
-
-        return pd.concat(dfs, ignore_index=True)
+        # change null to 'not available'
+        df = df.fillna("Not available")
+        return df.to_string(index=False)
