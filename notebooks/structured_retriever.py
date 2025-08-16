@@ -46,7 +46,7 @@ class StructuredRetriever:
             "operating income": ("income_statements", "op_income"),
             "basic": ("income_statements", "basic"),
             "diluted": ("income_statements", "diluted"),
-            "cash from operating": ("cash_from_ops", None),
+            "cash from operating": ("cash_flows", "cash_from_ops"),
             "cash from investing": ("cash_flows", "cash_from_investing"),
             "cash from financing": ("cash_flows", "cash_from_financing"),
             "ending cash": ("cash_flows", "ending_cash")
