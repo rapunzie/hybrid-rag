@@ -51,6 +51,17 @@ class StructuredRetriever:
             "cash from financing": ("cash_flows", "cash_from_financing"),
             "ending cash": ("cash_flows", "ending_cash")
         }
+        
+    @staticmethod
+    def format_cashflow(value, flow_type):
+        if isinstance(value, (int, float)):
+            if value < 0:
+                return f"cash outflows of ${abs(value):,} million from {flow_type}"
+            elif value > 0:
+                return f"cash inflows of ${value:,} million from {flow_type}"
+            else:
+                return f"no net cash flow from {flow_type}"
+        return value  
 
     def extract_company(self, question):
         match = re.search(r"\b(apple|microsoft|tesla|alphabet|google|procter&gamble|p&g)\b", question, re.I)
@@ -85,12 +96,21 @@ class StructuredRetriever:
         table, column = self.detect_table_and_column(query)
 
         if not table:
-            return f"Tidak bisa menentukan tabel dari pertanyaan: '{query}'"
+            return f"Unable to determine the table from the question: '{query}'"
 
         df = self.db.get_table_data(table, company, fy, column)
         if df.empty:
-            return f"Data tidak ditemukan untuk {company or 'perusahaan'} {fy or 'tahun'} di tabel {table}"
+            return f"No data found for {company or 'company'} {fy or 'the requested year'} from table {table}"
 
         # change null to 'not available'
         df = df.fillna("Not available")
+        if column in ["cash_from_ops", "cash_from_investing", "cash_from_financing"]:
+                    flow_type_map = {
+                        "cash_from_ops": "operating activities",
+                        "cash_from_investing": "investing activities",
+                        "cash_from_financing": "financing activities"
+                    }
+                    flow_type = flow_type_map.get(column, "cash flow")
+                    df[column] = df[column].apply(lambda v: self.format_cashflow(v, flow_type))
+        
         return df.to_string(index=False)
