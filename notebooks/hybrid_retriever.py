@@ -1,30 +1,25 @@
-# hybrid_retriever.py
-
 from structured_retriever import StructuredRetriever
 from vector_retriever import VectorRetriever
-import re
 
 class HybridRetriever:
-    def __init__(self, db_path, qdrant_url, qdrant_api_key, qdrant_collection):
+    def __init__(self, db_path, qdrant_url, qdrant_api_key, qdrant_collection="annual_report"):
         self.structured = StructuredRetriever(db_path)
         self.vector = VectorRetriever(qdrant_url, qdrant_api_key, qdrant_collection)
 
     def classify_question(self, question):
-        """
-        Simple heuristic:
-        - If question contains keywords related to numeric data, classify as 'numeric'
-        - If question contains keywords related to narrative/unstructured, classify as 'narrative'
-        - Else 'mixed'
-        """
         numeric_keywords = [
-            "revenue", "income", "assets", "liabilities", "equity", 
-            "cash", "eps", "cost", "margin", "operating", "finance"
+            "revenue", "income", "net income", "gross profit", "gross margin",
+            "operating income", "assets", "liabilities", "equity", "cash",
+            "eps", "basic", "diluted", "cost", "cost of sales",
+            "investing", "financing", "dividends", "capex", "debt", "profit", "earnings", "expense"
         ]
         narrative_keywords = [
-            "management discussion", "strategy", "risk", "product", "overview",
-            "discussion", "governance", "sustainability"
+            "management discussion", "risk", "risk factors", "strategy", "plan",
+            "product", "overview", "discussion", "governance", "sustainability",
+            "board", "executive", "policy", "compliance",
+            "operations", "performance", "market", "competition",
+            "environment", "social", "human capital", "innovation"
         ]
-
         question_lower = question.lower()
         num_hits = sum(kw in question_lower for kw in numeric_keywords)
         nar_hits = sum(kw in question_lower for kw in narrative_keywords)
@@ -37,20 +32,18 @@ class HybridRetriever:
             return "mixed"
 
     def retrieve(self, question):
+        company = self.structured.extract_company(question)
         category = self.classify_question(question)
 
         if category == "numeric":
-            # Structured only
             df = self.structured.retrieve(question)
             return {"type": "numeric", "data": df}
 
         elif category == "narrative":
-            # Vector only
-            contexts = self.vector.retrieve(question)
+            contexts = self.vector.retrieve(question, company=company)
             return {"type": "narrative", "data": contexts}
 
         else:
-            # Mixed: combine both
             df = self.structured.retrieve(question)
-            contexts = self.vector.retrieve(question)
+            contexts = self.vector.retrieve(question, company=company)
             return {"type": "mixed", "numeric": df, "narrative": contexts}
