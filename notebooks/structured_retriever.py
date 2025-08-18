@@ -87,6 +87,15 @@ class StructuredRetriever:
                 return table, column
         return None, None
 
+    def format_financial_value(self, column, value):
+        if value == "Not available":
+            return value
+        if column in ["basic", "diluted"]:  
+            return f"${value} USD per share"
+        elif isinstance(value, (int, float)):
+            return f"${value:,} million USD"
+        return value
+
     def retrieve(self, query, raw_sql=False):
         if raw_sql:
             return self.db.query(query).to_string(index=False)
@@ -102,15 +111,19 @@ class StructuredRetriever:
         if df.empty:
             return f"No data found for {company or 'company'} {fy or 'the requested year'} from table {table}"
 
-        # change null to 'not available'
         df = df.fillna("Not available")
+
+        # Handle cashflow special formatting
         if column in ["cash_from_ops", "cash_from_investing", "cash_from_financing"]:
-                    flow_type_map = {
-                        "cash_from_ops": "operating activities",
-                        "cash_from_investing": "investing activities",
-                        "cash_from_financing": "financing activities"
-                    }
-                    flow_type = flow_type_map.get(column, "cash flow")
-                    df[column] = df[column].apply(lambda v: self.format_cashflow(v, flow_type))
-        
+            flow_type_map = {
+                "cash_from_ops": "operating activities",
+                "cash_from_investing": "investing activities",
+                "cash_from_financing": "financing activities"
+            }
+            flow_type = flow_type_map.get(column, "cash flow")
+            df[column] = df[column].apply(lambda v: self.format_cashflow(v, flow_type))
+        else:
+            # Apply general formatter for units
+            df[column] = df[column].apply(lambda v: self.format_financial_value(column, v))
+
         return df.to_string(index=False)
