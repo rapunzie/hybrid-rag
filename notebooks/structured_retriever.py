@@ -93,7 +93,8 @@ class StructuredRetriever:
         if column in ["basic", "diluted"]:  
             return f"${value} USD per share"
         elif isinstance(value, (int, float)):
-            return f"${value:,} million USD"
+            billion_value = value / 1000
+            return f"${value:,} million (≈ {billion_value: .1f} billion"
         return value
 
     def retrieve(self, query, raw_sql=False):
